@@ -1,0 +1,46 @@
+name: Always Single Commit (Privacy Guard)
+
+on:
+  # 监听 main 分支的推送事件
+  # 一旦有新东西 push 上来，立刻触发清理
+  push:
+    branches:
+      - main
+  
+  # 保留手动触发按钮，以备不时之需
+  workflow_dispatch:
+
+# 权限配置：赋予脚本修改仓库内容的权限
+permissions:
+  contents: write
+
+jobs:
+  clean-history:
+    runs-on: ubuntu-latest
+    # 添加一个防止死循环的判断：
+    # 如果最新的提交是由这个脚本本身生成的（Commit 信息包含特定关键词），则不运行
+    if: "!contains(github.event.head_commit.message, 'Auto-cleaning history')"
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 获取所有文件
+
+      - name: Squash and Force Push
+        run: |
+          # 1. 配置机器人身份
+          git config --global user.name "Privacy Bot"
+          git config --global user.email "bot@noreply.github.com"
+
+          # 2. 切换到孤儿分支（无历史状态）
+          git checkout --orphan temp_cleaner
+          
+          # 3. 添加当前所有文件
+          git add -A
+
+          # 4. 提交（带上特殊的标记信息，防止无限循环触发）
+          git commit -m "Gallery Update: Auto-cleaning history [skip ci]"
+
+          # 5. 强制覆盖 main 分支
+          git push -f origin temp_cleaner:main
